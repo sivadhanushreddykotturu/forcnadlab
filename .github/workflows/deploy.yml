@@ -1,0 +1,38 @@
+name: Secure Helm Deployment
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Helm
+        uses: azure/setup-helm@v4
+
+      - name: Validate Helm chart
+        run: |
+          helm lint ./helm/myapp
+          helm template myapp ./helm/myapp
+
+      - name: Configure Kubernetes access
+        env:
+          KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
+        run: |
+          mkdir -p "$HOME/.kube"
+          umask 077
+          printf '%s' "$KUBECONFIG_DATA" > "$HOME/.kube/config"
+          chmod 600 "$HOME/.kube/config"
+
+      - name: Deploy using Helm
+        run: |
+          helm upgrade --install myapp ./helm/myapp \
+            --namespace lab --create-namespace \
+            --wait --timeout 120s
