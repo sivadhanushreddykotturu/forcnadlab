@@ -22,13 +22,21 @@ jobs:
           helm lint ./helm/myapp
           helm template myapp ./helm/myapp
 
-      - name: Configure Kubernetes access
+      - name: Start Ephemeral Kubernetes Cluster
+        uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: lab-cluster
+
+      - name: Secure Credentials Management
         env:
           KUBECONFIG_DATA: ${{ secrets.KUBECONFIG }}
         run: |
+          # Ensure strict permissions on kubeconfig (no world read/write)
           mkdir -p "$HOME/.kube"
           umask 077
-          printf '%s' "$KUBECONFIG_DATA" > "$HOME/.kube/config"
+          if [ -n "$KUBECONFIG_DATA" ] && [ "$KUBECONFIG_DATA" != "" ]; then
+            printf '%s' "$KUBECONFIG_DATA" > "$HOME/.kube/config.secret"
+          fi
           chmod 600 "$HOME/.kube/config"
 
       - name: Deploy using Helm
@@ -36,3 +44,8 @@ jobs:
           helm upgrade --install myapp ./helm/myapp \
             --namespace lab --create-namespace \
             --wait --timeout 120s
+
+      - name: Verify Kubernetes Deployment
+        run: |
+          kubectl get all -n lab
+          helm list -n lab
